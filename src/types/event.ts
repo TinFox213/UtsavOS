@@ -125,6 +125,23 @@ export type CopilotMode =
   | 'VENDOR_NEGOTIATOR'
   | 'CRISIS_SIMULATOR';
 
+export interface EventAIRequestBody {
+  copilotMode: CopilotMode;
+  eventType: EventArchetype;
+  subType: string;
+  eventName: string;
+  guestCount: number;
+  totalBudget: number;
+  currency: CurrencyCode;
+  netAllocatableBudget: number;
+  cateringCap: number;
+  decorCap: number;
+  venueCap: number;
+  location: string;
+  userPrompt: string;
+  dietaryAndCultural?: Record<string, unknown> | DietaryBreakdown;
+}
+
 export interface AIGenerationRun {
   runId: string;
   timestampIso: string;

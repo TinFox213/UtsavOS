@@ -1,6 +1,6 @@
 // src/services/geminiService.ts
-import { AIGenerationRun } from '../types/event';
-import { EventAIRequestBody, buildEventCopilotPrompt } from '../../api/v1/ai-generate';
+import { AIGenerationRun, EventAIRequestBody } from '../types/event';
+import { buildEventCopilotPrompt } from '../shared/promptBuilder';
 
 export async function requestAIGeneration(body: EventAIRequestBody): Promise<AIGenerationRun> {
   const startTime = Date.now();
