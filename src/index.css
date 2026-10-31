@@ -1,0 +1,31 @@
+@import "tailwindcss";
+
+@layer base {
+  :root {
+    --brand-primary: #4f46e5;
+    --celebration-accent: #e11d48;
+    --status-emerald: #047857;
+    --status-amber: #92400e;
+    --status-crimson: #b91c1c;
+  }
+
+  body {
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  }
+
+  .tabular-nums {
+    font-variant-numeric: tabular-nums;
+    font-family: 'JetBrains Mono', monospace;
+  }
+}
+
+/* High Contrast Mode Overrides */
+body.high-contrast {
+  --brand-primary: #1e1b4b;
+  background-color: #ffffff !important;
+  color: #000000 !important;
+}
+
+body.high-contrast button {
+  border: 2px solid #000000 !important;
+}
