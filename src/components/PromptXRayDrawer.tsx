@@ -23,6 +23,14 @@ export const PromptXRayDrawer: React.FC<PromptXRayDrawerProps> = ({
 }) => {
   const [activeTab, setActiveTab] = useState<'INSPECTOR' | 'DYNAMIC_DIFF'>('INSPECTOR');
 
+  React.useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && isOpen) onClose();
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, onClose]);
+
   if (!isOpen) return null;
 
   const latestRun = recentRuns.length > 0 ? recentRuns[recentRuns.length - 1] : undefined;

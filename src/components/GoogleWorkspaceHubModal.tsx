@@ -34,6 +34,14 @@ export const GoogleWorkspaceHubModal: React.FC<GoogleWorkspaceHubModalProps> = (
   const [isSyncing, setIsSyncing] = useState<boolean>(false);
   const [syncResult, setSyncResult] = useState<WorkspaceSyncResult | null>(null);
 
+  React.useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && isOpen) onClose();
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, onClose]);
+
   if (!isOpen) return null;
 
   const handleSyncToDrive = async () => {

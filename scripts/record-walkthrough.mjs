@@ -20,6 +20,20 @@ async function runWalkthrough() {
   console.log('--- Starting AuraPlan AI (UtsavOS) Walkthrough Recorder ---');
   const startTime = Date.now();
 
+  // Load .env variables
+  const envPath = path.resolve(rootDir, '.env');
+  if (fs.existsSync(envPath)) {
+    const dotenv = fs.readFileSync(envPath, 'utf8');
+    for (const line of dotenv.split('\n')) {
+      const [k, ...v] = line.split('=');
+      if (k && k.trim()) {
+        process.env[k.trim()] = v.join('=').trim().replace(/^["']|["']$/g, '');
+      }
+    }
+    console.log('Environment loaded: GEMINI_API_KEY is', process.env.GEMINI_API_KEY ? 'ACTIVE' : 'MISSING');
+    console.log('Environment loaded: VITE_GAS_WEBHOOK_URL is', process.env.VITE_GAS_WEBHOOK_URL ? 'ACTIVE' : 'MISSING');
+  }
+
   // 1. Start Vite Server
   console.log('Starting Vite server...');
   const server = await createServer({
@@ -62,7 +76,7 @@ async function runWalkthrough() {
     await sleep(2500);
 
     // ========================================================
-    // SECTION 1: Setup & Live QA Bar (0s - 14s)
+    // SECTION 1: Setup & Live QA Bar (0s - 15s)
     // ========================================================
     console.log('Walkthrough: Section 1 - Onboarding Wizard & Live QA Bar');
     await page.evaluate(() => window.scrollTo({ top: 0, behavior: 'smooth' }));
@@ -115,7 +129,7 @@ async function runWalkthrough() {
     }
 
     // ========================================================
-    // SECTION 2: Command Center Dashboard (14s - 25s)
+    // SECTION 2: Command Center Dashboard (15s - 26s)
     // ========================================================
     console.log('Walkthrough: Section 2 - Command Center Dashboard');
     await page.keyboard.press('Alt+2');
@@ -151,7 +165,7 @@ async function runWalkthrough() {
     await sleep(2500);
 
     // ========================================================
-    // SECTION 3: Parametric Budget Studio (25s - 35s)
+    // SECTION 3: Parametric Budget Studio (26s - 36s)
     // ========================================================
     console.log('Walkthrough: Section 3 - Parametric Budget Studio');
     await page.keyboard.press('Alt+3');
@@ -176,7 +190,7 @@ async function runWalkthrough() {
     await sleep(2500);
 
     // ========================================================
-    // SECTION 4: Critical Path Timeline & Run of Show Delays (35s - 46s)
+    // SECTION 4: Critical Path Timeline & Run of Show Delays (36s - 47s)
     // ========================================================
     console.log('Walkthrough: Section 4 - Timeline & Run of Show');
     await page.keyboard.press('Alt+4');
@@ -200,7 +214,7 @@ async function runWalkthrough() {
     await sleep(2500);
 
     // ========================================================
-    // SECTION 5: Vendor Studio & Tranche Management (46s - 55s)
+    // SECTION 5: Vendor Studio & Tranche Management (47s - 56s)
     // ========================================================
     console.log('Walkthrough: Section 5 - Vendor Studio');
     await page.keyboard.press('Alt+5');
@@ -219,7 +233,7 @@ async function runWalkthrough() {
     await sleep(2500);
 
     // ========================================================
-    // SECTION 6: GenAI Copilot Studio (55s - 65s)
+    // SECTION 6: GenAI Copilot Studio (56s - 67s)
     // ========================================================
     console.log('Walkthrough: Section 6 - GenAI Copilot Studio');
     await page.keyboard.press('Alt+6');
@@ -227,15 +241,15 @@ async function runWalkthrough() {
     await page.evaluate(() => window.scrollTo({ top: 0, behavior: 'smooth' }));
     await sleep(1500);
 
-    // Trigger AI Generation
+    // Trigger Live Gemini 2.5 Flash Generation
     const generateAiBtn = page.locator('button:has-text("Execute Copilot & Inspect X-Ray"), button:has-text("Generate")').first();
     if (await generateAiBtn.isVisible({ timeout: 1500 })) {
       await generateAiBtn.click();
-      await sleep(3500);
+      await sleep(5000); // Live AI response rendering
     }
 
     // ========================================================
-    // SECTION 7: Prompt X-Ray Drawer (65s - 73s)
+    // SECTION 7: Prompt X-Ray Drawer (67s - 76s)
     // ========================================================
     console.log('Walkthrough: Section 7 - Prompt X-Ray Drawer');
     await page.keyboard.press('Alt+X');
@@ -249,20 +263,45 @@ async function runWalkthrough() {
     }
 
     // Close Prompt X-Ray Drawer
-    await page.keyboard.press('Alt+X');
-    await sleep(1500);
+    try {
+      const closeDrawerBtn = page.locator('div[role="dialog"] button:has(.lucide-x), button[aria-label*="close" i]').first();
+      if (await closeDrawerBtn.isVisible({ timeout: 1000 })) {
+        await closeDrawerBtn.click();
+      } else {
+        await page.keyboard.press('Escape');
+      }
+    } catch {
+      await page.keyboard.press('Escape');
+    }
+    await sleep(2000);
 
     // ========================================================
-    // SECTION 8: Google Workspace Hub Modal (73s - 81s)
+    // SECTION 8: Google Workspace Hub Modal (76s - 85s)
     // ========================================================
     console.log('Walkthrough: Section 8 - Google Workspace Hub Modal');
     const hubBtn = page.locator('button:has-text("Google Workspace Hub")').first();
     if (await hubBtn.isVisible({ timeout: 1500 })) {
       await hubBtn.click();
-      await sleep(3000);
+      await sleep(3500);
+
+      // Trigger 1-Click Sync to Drive & Apps Script Webhook
+      const syncBtn = page.locator('button:has-text("Sync to Google Drive & Workspace Webhook")').first();
+      if (await syncBtn.isVisible({ timeout: 1500 })) {
+        await syncBtn.click();
+        await sleep(4000);
+      }
 
       // Close modal
-      await page.keyboard.press('Escape');
+      try {
+        const closeModalBtn = page.locator('div[role="dialog"] button:has(.lucide-x)').first();
+        if (await closeModalBtn.isVisible({ timeout: 1000 })) {
+          await closeModalBtn.click();
+        } else {
+          await page.keyboard.press('Escape');
+        }
+      } catch {
+        await page.keyboard.press('Escape');
+      }
       await sleep(1500);
     }
 
