@@ -1,9 +1,15 @@
-// api/v1/ai-generate.ts
 import { GoogleGenAI } from '@google/genai';
-import { auditAndSanitizeInput } from '../../src/shared/securityGuardrails';
-import { CopilotMode, EventArchetype, CurrencyCode, DietaryBreakdown } from '../../src/types/event';
+import { parseIncomingBody, sendJson, VercelCompatibleRequest, VercelCompatibleResponse } from '../_lib/http';
+import { auditAndSanitizeInput } from '../_lib/security';
+import {
+  generateDynamicSynthesisFallback,
+  SynthesisInput,
+  CopilotMode,
+  EventArchetype,
+  CurrencyCode,
+} from '../_lib/synthesizer';
 
-export interface EventAIRequestBody {
+export interface EventAIRequestBody extends SynthesisInput {
   copilotMode: CopilotMode;
   eventType: EventArchetype;
   subType: string;
@@ -17,7 +23,6 @@ export interface EventAIRequestBody {
   venueCap: number;
   location: string;
   userPrompt: string;
-  dietaryAndCultural?: Record<string, unknown> | DietaryBreakdown;
 }
 
 export function buildEventCopilotPrompt(input: EventAIRequestBody): string {
@@ -35,58 +40,59 @@ export function buildEventCopilotPrompt(input: EventAIRequestBody): string {
   ].join('\n');
 }
 
-export default async function handler(req: any, res: any) {
+async function callGeminiModel(apiKey: string, promptText: string) {
+  const ai = new GoogleGenAI({ apiKey });
+  const response = await ai.models.generateContent({
+    model: 'gemini-2.5-flash',
+    contents: promptText,
+    config: {
+      responseMimeType: 'application/json',
+    },
+  });
+  const rawText = response.text || '{}';
+  return JSON.parse(rawText);
+}
+
+export default async function handler(req: VercelCompatibleRequest, res: VercelCompatibleResponse) {
   if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Method not allowed. Use POST.' });
+    return sendJson(res, 405, { error: 'Method not allowed. Use POST.' });
   }
 
   const startTime = Date.now();
-  const body: EventAIRequestBody = req.body;
+  let body: EventAIRequestBody;
+  try {
+    body = await parseIncomingBody(req);
+  } catch (err: any) {
+    return sendJson(res, 400, { error: 'Invalid JSON', message: err.message });
+  }
 
-  // 1. OWASP LLM01 Sanitization
   const audit = auditAndSanitizeInput(body.userPrompt || '');
   if (!audit.isSafe) {
-    return res.status(400).json({
+    return sendJson(res, 400, {
       error: 'Security Guardrail Violation',
       message: audit.triggeredRule,
     });
   }
 
+  const promptText = buildEventCopilotPrompt(body);
   const apiKey = process.env.GEMINI_API_KEY;
+
   if (!apiKey) {
-    return res.status(500).json({
-      error: 'Configuration Error',
-      message: 'GEMINI_API_KEY environment variable is not configured on server.',
-    });
+    const fallback = generateDynamicSynthesisFallback(body, promptText, startTime);
+    return sendJson(res, 200, { ...fallback, fallbackMode: true });
   }
 
   try {
-    const ai = new GoogleGenAI({ apiKey });
-    const promptText = buildEventCopilotPrompt(body);
-
-    const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
-      contents: promptText,
-      config: {
-        responseMimeType: 'application/json',
-      },
-    });
-
-    const latencyMs = Date.now() - startTime;
-    const rawText = response.text || '{}';
-    const structuredOutput = JSON.parse(rawText);
-
-    return res.status(200).json({
+    const structuredOutput = await callGeminiModel(apiKey, promptText);
+    return sendJson(res, 200, {
       runId: `run_${Date.now()}`,
       modelUsed: 'gemini-2.5-flash',
-      latencyMs,
+      latencyMs: Date.now() - startTime,
       promptSent: promptText,
       structuredOutput,
     });
-  } catch (err: any) {
-    return res.status(500).json({
-      error: 'Gemini Generation Error',
-      message: err.message || 'Failed to generate structured AI response.',
-    });
+  } catch {
+    const fallback = generateDynamicSynthesisFallback(body, promptText, startTime);
+    return sendJson(res, 200, { ...fallback, fallbackMode: true });
   }
 }

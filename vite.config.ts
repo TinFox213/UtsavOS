@@ -11,6 +11,16 @@ export default defineConfig({
       name: 'api-serverless-middleware',
       configureServer(server) {
         server.middlewares.use(async (req, res, next) => {
+          if (req.url?.startsWith('/api/v1/health-and-test')) {
+            const { default: handler } = await import('./api/v1/health-and-test');
+            await handler(req as any, res as any);
+            return;
+          }
+          if (req.url?.startsWith('/api/v1/ai-generate')) {
+            const { default: handler } = await import('./api/v1/ai-generate');
+            await handler(req as any, res as any);
+            return;
+          }
           if (req.url?.startsWith('/api/v1/verify-test-suite')) {
             res.setHeader('Content-Type', 'application/json');
             res.end(
