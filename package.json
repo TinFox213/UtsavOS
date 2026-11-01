@@ -2,6 +2,21 @@
   "name": "auraplan-ai-event-planner",
   "private": true,
   "version": "1.0.0",
+  "description": "AuraPlan AI (UtsavOS) — Autonomous Multimodal Celebration & Event Planning Operating System",
+  "author": "Arikaran P",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/TinFox213/UtsavOS.git"
+  },
+  "keywords": [
+    "promptwars",
+    "event-planner",
+    "gemini-2.5-flash",
+    "autonomous-agents",
+    "react19",
+    "typescript"
+  ],
   "type": "module",
   "scripts": {
     "dev": "vite",

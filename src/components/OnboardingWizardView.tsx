@@ -22,6 +22,35 @@ export interface OnboardingWizardProps {
  * Step 1 Onboarding Wizard orchestrating organizer verification, celebration archetype selection,
  * and mathematical constraints input with real-time QA bar telemetry.
  */
+function getFieldTelemetrics(field: string, value: unknown, currency: string) {
+  if (field === 'organizerEmail') {
+    const isValid = QuickFieldValidators.isValidEmail(String(value));
+    return {
+      status: (isValid ? 'VALID' : 'INVALID') as 'VALID' | 'INVALID',
+      msg: isValid
+        ? `✓ VALID RFC-5322 EMAIL: "${value}" Verified`
+        : `✗ INVALID EMAIL: "${value}" — Missing domain TLD (.com, .org, .in)`,
+    };
+  }
+  if (field === 'totalBudget') {
+    const isPos = Number(value) > 0;
+    return {
+      status: (isPos ? 'VALID' : 'INVALID') as 'VALID' | 'INVALID',
+      msg: isPos
+        ? `✓ POSITIVE BUDGET: ${currency} ${Number(value).toLocaleString()}`
+        : `✗ INVALID BUDGET: "${value}" — Must be greater than 0`,
+    };
+  }
+  if (field === 'eventDate') {
+    const isFut = QuickFieldValidators.isFutureDate(String(value));
+    return {
+      status: (isFut ? 'VALID' : 'INVALID') as 'VALID' | 'INVALID',
+      msg: isFut ? `✓ FUTURE DATE: ${value}` : `✗ PAST DATE: "${value}" — Event cannot be in past`,
+    };
+  }
+  return { status: 'NEUTRAL' as const, msg: 'Active input' };
+}
+
 export const OnboardingWizardView: React.FC<OnboardingWizardProps> = ({
   eventPlan,
   onUpdatePlan,
@@ -47,25 +76,9 @@ export const OnboardingWizardView: React.FC<OnboardingWizardProps> = ({
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   const validateFieldTelemetrics = (field: string, value: unknown) => {
-    if (field === 'organizerEmail') {
-      const isValid = QuickFieldValidators.isValidEmail(String(value));
-      const msg = isValid
-        ? `✓ VALID RFC-5322 EMAIL: "${value}" Verified`
-        : `✗ INVALID EMAIL: "${value}" — Missing domain TLD (.com, .org, .in)`;
-      onFieldFocus(field, String(value), isValid ? 'VALID' : 'INVALID', msg);
-    } else if (field === 'totalBudget') {
-      const isPos = Number(value) > 0;
-      const msg = isPos
-        ? `✓ POSITIVE BUDGET: ${formData.currency} ${Number(value).toLocaleString()}`
-        : `✗ INVALID BUDGET: "${value}" — Must be greater than 0`;
-      onFieldFocus(field, Number(value), isPos ? 'VALID' : 'INVALID', msg);
-    } else if (field === 'eventDate') {
-      const isFut = QuickFieldValidators.isFutureDate(String(value));
-      const msg = isFut ? `✓ FUTURE DATE: ${value}` : `✗ PAST DATE: "${value}" — Event cannot be in past`;
-      onFieldFocus(field, String(value), isFut ? 'VALID' : 'INVALID', msg);
-    } else {
-      onFieldFocus(field, typeof value === 'number' ? value : String(value ?? ''), 'NEUTRAL', 'Active input');
-    }
+    const { status, msg } = getFieldTelemetrics(field, value, formData.currency);
+    const displayVal = typeof value === 'number' ? value : String(value ?? '');
+    onFieldFocus(field, displayVal, status, msg);
   };
 
   const handleFieldChange = (field: string, value: unknown) => {

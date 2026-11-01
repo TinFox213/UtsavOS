@@ -59,23 +59,29 @@ export const PromptXRayDrawer: React.FC<PromptXRayDrawerProps> = ({
           </div>
 
           <div className="flex items-center gap-2">
-            <div className="flex items-center bg-slate-800 p-0.5 rounded-lg border border-slate-700 text-xs font-bold">
+            <div role="tablist" aria-label="Prompt X-Ray drawer tabs" className="flex items-center bg-slate-800 p-0.5 rounded-lg border border-slate-700 text-xs font-bold">
               <button
+                id="xray-tab-inspector"
                 type="button"
+                role="tab"
+                aria-selected={activeTab === 'INSPECTOR'}
+                aria-controls="xray-panel-inspector"
                 onClick={() => setActiveTab('INSPECTOR')}
-                aria-pressed={activeTab === 'INSPECTOR'}
                 className={`px-3 py-1 rounded-md transition-all cursor-pointer ${
-                  activeTab === 'INSPECTOR' ? 'bg-indigo-600 text-white' : 'text-slate-400'
+                  activeTab === 'INSPECTOR' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-slate-200'
                 }`}
               >
                 Prompt & JSON Inspector
               </button>
               <button
+                id="xray-tab-diff"
                 type="button"
+                role="tab"
+                aria-selected={activeTab === 'DYNAMIC_DIFF'}
+                aria-controls="xray-panel-diff"
                 onClick={() => setActiveTab('DYNAMIC_DIFF')}
-                aria-pressed={activeTab === 'DYNAMIC_DIFF'}
                 className={`px-3 py-1 rounded-md transition-all cursor-pointer ${
-                  activeTab === 'DYNAMIC_DIFF' ? 'bg-indigo-600 text-white' : 'text-slate-400'
+                  activeTab === 'DYNAMIC_DIFF' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-slate-200'
                 }`}
               >
                 Dynamic Proof (Run #1 vs #2)
@@ -93,11 +99,18 @@ export const PromptXRayDrawer: React.FC<PromptXRayDrawerProps> = ({
           </div>
         </div>
 
-        {activeTab === 'INSPECTOR' ? (
-          <TelemetryMetrics latestRun={latestRun} />
-        ) : (
-          <PromptDiffViewer diffReport={diffReport} />
-        )}
+        <div
+          id={activeTab === 'INSPECTOR' ? 'xray-panel-inspector' : 'xray-panel-diff'}
+          role="tabpanel"
+          aria-labelledby={activeTab === 'INSPECTOR' ? 'xray-tab-inspector' : 'xray-tab-diff'}
+          className="flex-1 flex flex-col overflow-hidden"
+        >
+          {activeTab === 'INSPECTOR' ? (
+            <TelemetryMetrics latestRun={latestRun} />
+          ) : (
+            <PromptDiffViewer diffReport={diffReport} />
+          )}
+        </div>
       </div>
     </div>
   );

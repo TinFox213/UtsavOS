@@ -194,4 +194,37 @@ describe('Serverless Universal HTTP & API Endpoints', () => {
       process.env.GEMINI_API_KEY = originalKey;
     }
   });
+
+  it('POST /api/v1/ai-generate: returns 400 Bad Request on invalid request schema payload', async () => {
+    let statusCode = 0;
+    let responseData: Record<string, unknown> | null = null;
+
+    const mockReq = {
+      method: 'POST',
+      headers: {},
+      body: {
+        copilotMode: 'INVALID_MODE',
+        eventType: 'NON_EXISTENT_TYPE',
+        guestCount: -99,
+      },
+    } as unknown as VercelCompatibleRequest;
+
+    const mockRes = {
+      status(code: number) {
+        statusCode = code;
+        return this;
+      },
+      json(data: unknown) {
+        responseData = data as Record<string, unknown>;
+      },
+      setHeader() {},
+    } as unknown as VercelCompatibleResponse;
+
+    await aiGenerateHandler(mockReq, mockRes);
+
+    expect(statusCode).toBe(400);
+    expect(responseData?.['error']).toBe('Validation Error');
+    expect(responseData?.['message']).toBe('Invalid request payload structure');
+    expect(Array.isArray(responseData?.['details'])).toBe(true);
+  });
 });

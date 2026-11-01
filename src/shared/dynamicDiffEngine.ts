@@ -42,6 +42,10 @@ function compareInputSnapshots(runA: AIGenerationRun, runB: AIGenerationRun): De
   return deltas;
 }
 
+function isPlainObject(val: unknown): val is Record<string, unknown> {
+  return typeof val === 'object' && val !== null;
+}
+
 function deepCompareObjects(
   objA: Record<string, unknown>,
   objB: Record<string, unknown>,
@@ -54,8 +58,8 @@ function deepCompareObjects(
     const valA = objA?.[key];
     const valB = objB?.[key];
 
-    if (typeof valA === 'object' && valA !== null && typeof valB === 'object' && valB !== null) {
-      deepCompareObjects(valA as Record<string, unknown>, valB as Record<string, unknown>, mutatedFields, currentPath);
+    if (isPlainObject(valA) && isPlainObject(valB)) {
+      deepCompareObjects(valA, valB, mutatedFields, currentPath);
     } else if (JSON.stringify(valA) !== JSON.stringify(valB)) {
       mutatedFields.push({
         fieldPath: currentPath,

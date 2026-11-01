@@ -1,5 +1,39 @@
 // src/utils/speechUtils.ts
 
+interface SpeechRecognitionAlternative {
+  transcript: string;
+}
+
+interface SpeechRecognitionResult {
+  [index: number]: SpeechRecognitionAlternative;
+  length: number;
+}
+
+interface SpeechRecognitionResultList {
+  [index: number]: SpeechRecognitionResult;
+  length: number;
+}
+
+interface SpeechRecognitionEvent {
+  results: SpeechRecognitionResultList;
+}
+
+interface SpeechRecognitionErrorEvent {
+  error: string;
+}
+
+interface ISpeechRecognition {
+  continuous: boolean;
+  interimResults: boolean;
+  lang: string;
+  onresult: ((event: SpeechRecognitionEvent) => void) | null;
+  onerror: ((event: SpeechRecognitionErrorEvent) => void) | null;
+  start(): void;
+  stop(): void;
+}
+
+type SpeechRecognitionConstructor = new () => ISpeechRecognition;
+
 export function speakText(text: string, onEnd?: () => void): void {
   if (typeof window === 'undefined' || !('speechSynthesis' in window)) {
     return;
@@ -21,26 +55,27 @@ export function createSpeechRecognizer(
     return { start: () => {}, stop: () => {}, isSupported: false };
   }
 
-  // @ts-expect-error - webkitSpeechRecognition vendor prefix
-  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  const win = window as unknown as {
+    SpeechRecognition?: SpeechRecognitionConstructor;
+    webkitSpeechRecognition?: SpeechRecognitionConstructor;
+  };
+  const SpeechRecognitionClass = win.SpeechRecognition || win.webkitSpeechRecognition;
 
-  if (!SpeechRecognition) {
+  if (!SpeechRecognitionClass) {
     return { start: () => {}, stop: () => {}, isSupported: false };
   }
 
-  const recognition = new SpeechRecognition();
+  const recognition = new SpeechRecognitionClass();
   recognition.continuous = false;
   recognition.interimResults = false;
   recognition.lang = 'en-US';
 
-  // @ts-expect-error - Event typing
-  recognition.onresult = (event) => {
-    const transcript = event.results?.[0]?.[0]?.transcript;
+  recognition.onresult = (event: SpeechRecognitionEvent) => {
+    const transcript = event.results[0]?.[0]?.transcript;
     if (transcript) onResult(transcript);
   };
 
-  // @ts-expect-error - Error event typing
-  recognition.onerror = (event) => {
+  recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
     if (onError) onError(event.error);
   };
 

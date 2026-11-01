@@ -1,5 +1,6 @@
 // api/v1/ai-generate.ts
 import { GoogleGenAI } from '@google/genai';
+import { z } from 'zod';
 import { parseIncomingBody, sendJson, VercelCompatibleRequest, VercelCompatibleResponse } from '../_lib/http';
 import { auditAndSanitizeInput, checkRateLimit, RateLimitResult } from '../_lib/security';
 import {
@@ -25,6 +26,29 @@ export interface EventAIRequestBody extends SynthesisInput {
   location: string;
   userPrompt: string;
 }
+
+export const EventAIRequestBodySchema = z.object({
+  copilotMode: z.enum([
+    'THEME_AND_IDEAS',
+    'MENU_AND_CATERING',
+    'BUDGET_OPTIMIZER',
+    'VENDOR_NEGOTIATOR',
+    'CRISIS_SIMULATOR',
+  ]),
+  eventType: z.enum(['WEDDING', 'BIRTHDAY', 'COMMUNITY_EVENT']),
+  subType: z.string().default('Celebration'),
+  eventName: z.string().default('Event Blueprint'),
+  guestCount: z.number().int().min(1).default(50),
+  totalBudget: z.number().positive().default(100000),
+  currency: z.enum(['INR', 'USD', 'EUR', 'GBP']).default('INR'),
+  netAllocatableBudget: z.number().optional().default(82000),
+  cateringCap: z.number().optional().default(30000),
+  decorCap: z.number().optional().default(15000),
+  venueCap: z.number().optional().default(20000),
+  location: z.string().default('Chennai'),
+  userPrompt: z.string().default(''),
+  dietaryAndCultural: z.record(z.unknown()).optional(),
+});
 
 export function buildEventCopilotPrompt(input: EventAIRequestBody): string {
   return [
@@ -98,28 +122,43 @@ async function executeCopilotPipeline(
   }
 }
 
-export default async function handler(req: VercelCompatibleRequest, res: VercelCompatibleResponse) {
+function validatePreflightAndRate(req: VercelCompatibleRequest, res: VercelCompatibleResponse): boolean {
   if (req.method === 'OPTIONS') {
-    return sendJson(res, 204, null);
+    sendJson(res, 204, null);
+    return false;
   }
-
   const clientIp = getClientIp(req);
   const rate = checkRateLimit(clientIp);
   applyRateLimit(res, rate);
-
   if (!rate.allowed) {
-    return sendJson(res, 429, { error: 'Too Many Requests', message: 'Rate limit exceeded' });
+    sendJson(res, 429, { error: 'Too Many Requests', message: 'Rate limit exceeded' });
+    return false;
   }
-
   if (req.method !== 'POST') {
-    return sendJson(res, 405, { error: 'Method not allowed. Use POST.' });
+    sendJson(res, 405, { error: 'Method not allowed. Use POST.' });
+    return false;
+  }
+  return true;
+}
+
+export default async function handler(req: VercelCompatibleRequest, res: VercelCompatibleResponse) {
+  if (!validatePreflightAndRate(req, res)) {
+    return;
   }
 
   const startTime = Date.now();
   let body: EventAIRequestBody;
   try {
     const raw = await parseIncomingBody(req);
-    body = raw as unknown as EventAIRequestBody;
+    const parsed = EventAIRequestBodySchema.safeParse(raw);
+    if (!parsed.success) {
+      return sendJson(res, 400, {
+        error: 'Validation Error',
+        message: 'Invalid request payload structure',
+        details: parsed.error.issues,
+      });
+    }
+    body = parsed.data as EventAIRequestBody;
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
     return sendJson(res, 400, { error: 'Invalid JSON', message });

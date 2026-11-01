@@ -15,16 +15,10 @@ export function isSafeHttpUrl(urlString: string): boolean {
 function isValidEventPlan(data: unknown): data is EventPlanState {
   if (!data || typeof data !== 'object') return false;
   const p = data as Record<string, unknown>;
-  return (
-    typeof p['id'] === 'string' &&
-    typeof p['eventName'] === 'string' &&
-    typeof p['city'] === 'string' &&
-    typeof p['guestCount'] === 'number' &&
-    typeof p['budget'] === 'object' &&
-    p['budget'] !== null &&
-    Array.isArray(p['milestones']) &&
-    Array.isArray(p['vendors'])
-  );
+  const hasStrings = typeof p['id'] === 'string' && typeof p['eventName'] === 'string' && typeof p['city'] === 'string';
+  const hasBudget = typeof p['guestCount'] === 'number' && typeof p['budget'] === 'object' && p['budget'] !== null;
+  const hasArrays = Array.isArray(p['milestones']) && Array.isArray(p['vendors']);
+  return hasStrings && hasBudget && hasArrays;
 }
 
 export function saveEventPlanToStorage(plan: EventPlanState): boolean {
