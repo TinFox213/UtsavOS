@@ -2,7 +2,6 @@
 
 export function speakText(text: string, onEnd?: () => void): void {
   if (typeof window === 'undefined' || !('speechSynthesis' in window)) {
-    console.warn('Speech synthesis not supported in this browser.');
     return;
   }
 

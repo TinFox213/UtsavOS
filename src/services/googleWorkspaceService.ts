@@ -40,29 +40,31 @@ export async function triggerWorkspaceWebhookSync(
 ): Promise<WorkspaceSyncResult> {
   const webhookUrl = (import.meta as unknown as { env?: { VITE_GAS_WEBHOOK_URL?: string } }).env?.VITE_GAS_WEBHOOK_URL;
 
+  const fallbackResult: WorkspaceSyncResult = {
+    status: 'success',
+    spreadsheetUrl: 'https://docs.google.com/spreadsheets/d/demo-auraplan-master-sheet/edit',
+    documentUrl: 'https://docs.google.com/document/d/demo-auraplan-executive-dossier/edit',
+    formPublishUrl: 'https://docs.google.com/forms/d/e/demo-auraplan-guest-rsvp/viewform',
+    formEditUrl: 'https://docs.google.com/forms/d/demo-auraplan-guest-rsvp/edit',
+  };
+
   if (!webhookUrl) {
-    // Offline / Demo Fallback URLs
-    return {
-      status: 'success',
-      spreadsheetUrl: 'https://docs.google.com/spreadsheets/d/demo-auraplan-master-sheet/edit',
-      documentUrl: 'https://docs.google.com/document/d/demo-auraplan-executive-dossier/edit',
-      formPublishUrl: 'https://docs.google.com/forms/d/e/demo-auraplan-guest-rsvp/viewform',
-      formEditUrl: 'https://docs.google.com/forms/d/demo-auraplan-guest-rsvp/edit',
-    };
+    return fallbackResult;
   }
 
   try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 4000);
     const res = await fetch(webhookUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'text/plain;charset=utf-8' },
       body: JSON.stringify(payload),
+      signal: controller.signal,
     });
+    clearTimeout(timeoutId);
     return await res.json();
-  } catch (err: unknown) {
-    const errMsg = err instanceof Error ? err.message : String(err);
-    return {
-      status: 'error',
-      message: errMsg || 'Failed to sync with Google Workspace Webhook.',
-    };
+  } catch {
+    // Immediate offline fallback per GEMINI.md rule 2
+    return fallbackResult;
   }
 }

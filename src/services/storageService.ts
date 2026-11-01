@@ -3,28 +3,60 @@ import { EventPlanState } from '../types/event';
 
 const STORAGE_KEY = 'auraplan_event_state_v1';
 
-export function saveEventPlanToStorage(plan: EventPlanState): void {
+export function isSafeHttpUrl(urlString: string): boolean {
+  try {
+    const url = new URL(urlString);
+    return url.protocol === 'http:' || url.protocol === 'https:';
+  } catch {
+    return false;
+  }
+}
+
+function isValidEventPlan(data: unknown): data is EventPlanState {
+  if (!data || typeof data !== 'object') return false;
+  const p = data as Record<string, unknown>;
+  return (
+    typeof p['id'] === 'string' &&
+    typeof p['eventName'] === 'string' &&
+    typeof p['city'] === 'string' &&
+    typeof p['guestCount'] === 'number' &&
+    typeof p['budget'] === 'object' &&
+    p['budget'] !== null &&
+    Array.isArray(p['milestones']) &&
+    Array.isArray(p['vendors'])
+  );
+}
+
+export function saveEventPlanToStorage(plan: EventPlanState): boolean {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(plan));
-  } catch (err) {
-    console.warn('Failed to save to localStorage:', err);
+    return true;
+  } catch {
+    return false;
   }
 }
 
 export function loadEventPlanFromStorage(): EventPlanState | null {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    return raw ? JSON.parse(raw) : null;
+    if (!raw) return null;
+    const parsed: unknown = JSON.parse(raw);
+    return isValidEventPlan(parsed) ? parsed : null;
   } catch {
     return null;
   }
 }
 
-/**
- * Exports complete plan as a formatted Markdown Dossier.
- */
-export function exportPlanAsMarkdown(plan: EventPlanState): string {
-  const lines: string[] = [
+export function clearEventPlanStorage(): void {
+  try {
+    localStorage.removeItem(STORAGE_KEY);
+  } catch {
+    // Silent fallback
+  }
+}
+
+function buildDossierHeader(plan: EventPlanState): string[] {
+  return [
     `# Master Event Blueprint Dossier: ${plan.eventName}`,
     `**Archetype:** ${plan.archetype} (${plan.subType})`,
     `**Date:** ${plan.eventDateIso} | **Location:** ${plan.city}`,
@@ -40,7 +72,10 @@ export function exportPlanAsMarkdown(plan: EventPlanState): string {
     '| Category | Allocated Amount | % Pool | Per Guest | Status |',
     '| :--- | :--- | :--- | :--- | :--- |',
   ];
+}
 
+function buildDossierSections(plan: EventPlanState): string[] {
+  const lines: string[] = [];
   plan.budget.categories.forEach((c) => {
     const pct = ((c.allocatedAmount / plan.budget.netAllocatableBudget) * 100).toFixed(1);
     lines.push(
@@ -57,8 +92,13 @@ export function exportPlanAsMarkdown(plan: EventPlanState): string {
   plan.runOfShow.forEach((s) => {
     lines.push(`- **${s.title}**: ${s.durationMinutes} mins (Buffer: ${s.bufferMinutes}m) — Owner: ${s.owner}`);
   });
+  return lines;
+}
 
-  return lines.join('\n');
+export function exportPlanAsMarkdown(plan: EventPlanState): string {
+  const header = buildDossierHeader(plan);
+  const sections = buildDossierSections(plan);
+  return [...header, ...sections].join('\n');
 }
 
 export function downloadTextFile(filename: string, text: string): void {
@@ -70,4 +110,5 @@ export function downloadTextFile(filename: string, text: string): void {
   document.body.appendChild(link);
   link.click();
   document.body.removeChild(link);
+  URL.revokeObjectURL(url);
 }

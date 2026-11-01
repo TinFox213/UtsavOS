@@ -31,6 +31,10 @@ export const WORKFLOW_STEPS = [
   { id: 6, label: '6. GenAI Studio', icon: Cpu },
 ];
 
+/**
+ * Top navigation stepper providing keyboard-navigable workflow tabs,
+ * multi-currency switching, WCAG high-contrast toggle, and X-Ray drawer launcher.
+ */
 export const NavbarStepper: React.FC<NavbarStepperProps> = ({
   currentStep,
   onSelectStep,
@@ -43,7 +47,6 @@ export const NavbarStepper: React.FC<NavbarStepperProps> = ({
   return (
     <header className="bg-white border-b border-slate-200 sticky top-10 z-40 shadow-xs">
       <div className="max-w-7xl mx-auto px-4 py-2.5 flex items-center justify-between gap-4">
-        {/* Brand */}
         <div className="flex items-center gap-2.5">
           <div className="w-9 h-9 rounded-xl bg-indigo-600 flex items-center justify-center text-white font-bold text-lg shadow-sm">
             A
@@ -58,13 +61,13 @@ export const NavbarStepper: React.FC<NavbarStepperProps> = ({
           </div>
         </div>
 
-        {/* 6-Step Stepper Navigation */}
         <nav aria-label="Event Planning Workflow" className="hidden lg:flex items-center gap-1">
           {WORKFLOW_STEPS.map((step) => {
             const Icon = step.icon;
             const isActive = currentStep === step.id;
             return (
               <button
+                type="button"
                 key={step.id}
                 onClick={() => onSelectStep(step.id)}
                 className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
@@ -74,22 +77,27 @@ export const NavbarStepper: React.FC<NavbarStepperProps> = ({
                 }`}
                 aria-current={isActive ? 'step' : undefined}
               >
-                <Icon className="w-3.5 h-3.5" />
+                <Icon className="w-3.5 h-3.5" aria-hidden="true" />
                 <span>{step.label}</span>
               </button>
             );
           })}
         </nav>
 
-        {/* Action Controls: Currency, High Contrast, Prompt X-Ray */}
         <div className="flex items-center gap-2">
-          {/* Currency Select */}
-          <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-lg border border-slate-200 text-xs font-bold">
-            <Globe className="w-3.5 h-3.5 text-slate-500 ml-1" />
+          <div
+            role="group"
+            aria-label="Currency selection"
+            className="flex items-center gap-1 bg-slate-100 p-1 rounded-lg border border-slate-200 text-xs font-bold"
+          >
+            <Globe className="w-3.5 h-3.5 text-slate-500 ml-1" aria-hidden="true" />
             {(['INR', 'USD', 'EUR', 'GBP'] as const).map((code) => (
               <button
+                type="button"
                 key={code}
                 onClick={() => onSelectCurrency(code)}
+                aria-label={`Select ${code} currency`}
+                aria-pressed={currency === code}
                 className={`px-1.5 py-0.5 rounded cursor-pointer ${
                   currency === code ? 'bg-white shadow-xs text-indigo-700' : 'text-slate-500'
                 }`}
@@ -99,25 +107,25 @@ export const NavbarStepper: React.FC<NavbarStepperProps> = ({
             ))}
           </div>
 
-          {/* High Contrast Toggle */}
           <button
+            type="button"
             onClick={onToggleHighContrast}
-            title={isHighContrast ? "High Contrast Enabled" : "Toggle WCAG High Contrast"}
+            title={isHighContrast ? 'High Contrast Enabled' : 'Toggle WCAG High Contrast'}
             aria-label="Toggle High Contrast Mode"
             aria-pressed={isHighContrast}
             className={`p-1.5 rounded-lg border border-slate-200 cursor-pointer ${
               isHighContrast ? 'bg-indigo-600 text-white' : 'text-slate-600 hover:bg-slate-100'
             }`}
           >
-            <SunMoon className="w-4 h-4" />
+            <SunMoon className="w-4 h-4" aria-hidden="true" />
           </button>
 
-          {/* Prompt X-Ray CTA */}
           <button
+            type="button"
             onClick={onOpenXRay}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-900 text-white text-xs font-bold hover:bg-slate-800 shadow-xs cursor-pointer"
           >
-            <Cpu className="w-3.5 h-3.5 text-emerald-400" />
+            <Cpu className="w-3.5 h-3.5 text-emerald-400" aria-hidden="true" />
             <span>Prompt X-Ray</span>
           </button>
         </div>

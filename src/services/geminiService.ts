@@ -55,7 +55,7 @@ export function generateDynamicSynthesisFallback(
   const isWedding = body.eventType === 'WEDDING';
   const isHackathon = body.eventType === 'COMMUNITY_EVENT';
 
-  let structuredOutput: Record<string, unknown> = {};
+  let structuredOutput: Record<string, unknown>;
 
   if (body.copilotMode === 'THEME_AND_IDEAS') {
     structuredOutput = {

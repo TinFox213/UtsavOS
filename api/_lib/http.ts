@@ -1,29 +1,29 @@
 import type { IncomingMessage, ServerResponse } from 'http';
 
 export interface VercelCompatibleRequest extends IncomingMessage {
-  body?: any;
+  body?: unknown;
   query?: Record<string, string | string[]>;
   cookies?: Record<string, string>;
 }
 
 export interface VercelCompatibleResponse extends ServerResponse {
   status?: (statusCode: number) => VercelCompatibleResponse;
-  json?: (data: any) => void;
+  json?: (data: unknown) => void;
 }
 
 export type VercelRequest = VercelCompatibleRequest;
 export type VercelResponse = VercelCompatibleResponse;
 
-export async function parseIncomingBody(req: VercelCompatibleRequest): Promise<any> {
+export async function parseIncomingBody(req: VercelCompatibleRequest): Promise<Record<string, unknown>> {
   if (req.body !== undefined && req.body !== null) {
     if (typeof req.body === 'string') {
       try {
-        return JSON.parse(req.body);
+        return JSON.parse(req.body) as Record<string, unknown>;
       } catch {
-        return req.body;
+        return { rawBody: req.body };
       }
     }
-    return req.body;
+    return req.body as Record<string, unknown>;
   }
 
   return new Promise((resolve, reject) => {
@@ -38,7 +38,7 @@ export async function parseIncomingBody(req: VercelCompatibleRequest): Promise<a
         return;
       }
       try {
-        resolve(JSON.parse(raw));
+        resolve(JSON.parse(raw) as Record<string, unknown>);
       } catch {
         reject(new Error('Invalid JSON payload received in request stream'));
       }
@@ -51,8 +51,15 @@ export async function parseIncomingBody(req: VercelCompatibleRequest): Promise<a
 export function sendJson(
   res: VercelCompatibleResponse,
   statusCode: number,
-  payload: Record<string, any>
+  payload: unknown
 ): void {
+  if (typeof res.setHeader === 'function') {
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('X-Frame-Options', 'DENY');
+    res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+    res.setHeader('X-XSS-Protection', '1; mode=block');
+  }
+
   if (typeof res.status === 'function' && typeof res.json === 'function') {
     res.status(statusCode);
     res.json(payload);
@@ -60,6 +67,8 @@ export function sendJson(
   }
 
   res.statusCode = statusCode;
-  res.setHeader('Content-Type', 'application/json; charset=utf-8');
+  if (typeof res.setHeader === 'function') {
+    res.setHeader('Content-Type', 'application/json; charset=utf-8');
+  }
   res.end(JSON.stringify(payload));
 }

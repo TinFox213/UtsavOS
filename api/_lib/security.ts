@@ -32,3 +32,46 @@ export function auditAndSanitizeInput(rawInput: string): SecurityAuditResult {
   const sanitized = trimmed.replace(/</g, '&lt;').replace(/>/g, '&gt;');
   return { isSafe: true, sanitizedText: sanitized, triggeredRule: null };
 }
+
+export interface RateLimitResult {
+  allowed: boolean;
+  remaining: number;
+  resetAt: number;
+}
+
+const rateLimitStore = new Map<string, number[]>();
+
+export function checkRateLimit(
+  clientIp: string,
+  maxRequests = 30,
+  windowMs = 60_000
+): RateLimitResult {
+  const now = Date.now();
+  const windowStart = now - windowMs;
+  const history = rateLimitStore.get(clientIp) || [];
+  const validTimestamps = history.filter((t) => t > windowStart);
+
+  if (validTimestamps.length >= maxRequests) {
+    const oldest = validTimestamps[0] ?? now;
+    rateLimitStore.set(clientIp, validTimestamps);
+    return {
+      allowed: false,
+      remaining: 0,
+      resetAt: oldest + windowMs,
+    };
+  }
+
+  validTimestamps.push(now);
+  rateLimitStore.set(clientIp, validTimestamps);
+  const oldest = validTimestamps[0] ?? now;
+
+  return {
+    allowed: true,
+    remaining: maxRequests - validTimestamps.length,
+    resetAt: oldest + windowMs,
+  };
+}
+
+export function resetRateLimitStore(): void {
+  rateLimitStore.clear();
+}
