@@ -1,72 +1,79 @@
 // src/shared/dynamicDiffEngine.ts
 import { AIGenerationRun, DynamicDiffReport } from '../types/event';
 
-/**
- * Computes side-by-side delta between two AI generation runs.
- * Identifies modified inputs and mutated output fields to prove responses are dynamic.
- */
-export function computeDynamicDiff(runA: AIGenerationRun, runB: AIGenerationRun): DynamicDiffReport {
-  const inputDeltas: Array<{ field: string; from: string | number; to: string | number }> = [];
+export interface DeltaItem {
+  field: string;
+  from: string | number;
+  to: string | number;
+}
 
-  // Compare inputs
-  if (runA.inputSnapshot.guestCount !== runB.inputSnapshot.guestCount) {
-    inputDeltas.push({
-      field: 'Guest Count',
-      from: `${runA.inputSnapshot.guestCount} guests`,
-      to: `${runB.inputSnapshot.guestCount} guests`,
-    });
+export interface MutatedFieldItem {
+  fieldPath: string;
+  previousValue: unknown;
+  updatedValue: unknown;
+  category: string;
+}
+
+function compareInputSnapshots(runA: AIGenerationRun, runB: AIGenerationRun): DeltaItem[] {
+  const deltas: DeltaItem[] = [];
+  const sA = runA.inputSnapshot;
+  const sB = runB.inputSnapshot;
+
+  if (sA.guestCount !== sB.guestCount) {
+    deltas.push({ field: 'Guest Count', from: `${sA.guestCount} guests`, to: `${sB.guestCount} guests` });
   }
-  if (runA.inputSnapshot.totalBudget !== runB.inputSnapshot.totalBudget) {
-    inputDeltas.push({
+  if (sA.totalBudget !== sB.totalBudget) {
+    deltas.push({
       field: 'Total Budget',
-      from: `${runA.inputSnapshot.currency} ${runA.inputSnapshot.totalBudget.toLocaleString()}`,
-      to: `${runB.inputSnapshot.currency} ${runB.inputSnapshot.totalBudget.toLocaleString()}`,
+      from: `${sA.currency} ${sA.totalBudget.toLocaleString()}`,
+      to: `${sB.currency} ${sB.totalBudget.toLocaleString()}`,
     });
   }
-  if (runA.inputSnapshot.eventType !== runB.inputSnapshot.eventType) {
-    inputDeltas.push({
-      field: 'Archetype',
-      from: runA.inputSnapshot.eventType,
-      to: runB.inputSnapshot.eventType,
-    });
+  if (sA.eventType !== sB.eventType) {
+    deltas.push({ field: 'Archetype', from: sA.eventType, to: sB.eventType });
   }
-  if (runA.inputSnapshot.userPrompt !== runB.inputSnapshot.userPrompt) {
-    inputDeltas.push({
+  if (sA.userPrompt !== sB.userPrompt) {
+    deltas.push({
       field: 'User Vibe Prompt',
-      from: runA.inputSnapshot.userPrompt.slice(0, 40) + '...',
-      to: runB.inputSnapshot.userPrompt.slice(0, 40) + '...',
+      from: sA.userPrompt.slice(0, 40) + '...',
+      to: sB.userPrompt.slice(0, 40) + '...',
     });
   }
+  return deltas;
+}
 
-  // Compare outputs recursively
-  const mutatedFields: Array<{
-    fieldPath: string;
-    previousValue: unknown;
-    updatedValue: unknown;
-    category: string;
-  }> = [];
+function deepCompareObjects(
+  objA: Record<string, unknown>,
+  objB: Record<string, unknown>,
+  mutatedFields: MutatedFieldItem[],
+  path = ''
+): void {
+  const allKeys = new Set([...Object.keys(objA || {}), ...Object.keys(objB || {})]);
+  for (const key of allKeys) {
+    const currentPath = path ? `${path}.${key}` : key;
+    const valA = objA?.[key];
+    const valB = objB?.[key];
 
-  function deepCompare(objA: Record<string, unknown>, objB: Record<string, unknown>, path = '') {
-    const allKeys = new Set([...Object.keys(objA || {}), ...Object.keys(objB || {})]);
-    for (const key of allKeys) {
-      const currentPath = path ? `${path}.${key}` : key;
-      const valA = objA?.[key];
-      const valB = objB?.[key];
-
-      if (typeof valA === 'object' && valA !== null && typeof valB === 'object' && valB !== null) {
-        deepCompare(valA as Record<string, unknown>, valB as Record<string, unknown>, currentPath);
-      } else if (JSON.stringify(valA) !== JSON.stringify(valB)) {
-        mutatedFields.push({
-          fieldPath: currentPath,
-          previousValue: valA,
-          updatedValue: valB,
-          category: path.split('.')[0] || 'General',
-        });
-      }
+    if (typeof valA === 'object' && valA !== null && typeof valB === 'object' && valB !== null) {
+      deepCompareObjects(valA as Record<string, unknown>, valB as Record<string, unknown>, mutatedFields, currentPath);
+    } else if (JSON.stringify(valA) !== JSON.stringify(valB)) {
+      mutatedFields.push({
+        fieldPath: currentPath,
+        previousValue: valA,
+        updatedValue: valB,
+        category: path.split('.')[0] || 'General',
+      });
     }
   }
+}
 
-  deepCompare(runA.structuredOutput, runB.structuredOutput);
+/**
+ * Computes side-by-side delta between two AI generation runs.
+ */
+export function computeDynamicDiff(runA: AIGenerationRun, runB: AIGenerationRun): DynamicDiffReport {
+  const inputDeltas = compareInputSnapshots(runA, runB);
+  const mutatedFields: MutatedFieldItem[] = [];
+  deepCompareObjects(runA.structuredOutput, runB.structuredOutput, mutatedFields);
 
   return {
     runAId: runA.runId,

@@ -1,3 +1,4 @@
+// api/_lib/http.ts
 import type { IncomingMessage, ServerResponse } from 'http';
 
 export interface VercelCompatibleRequest extends IncomingMessage {
@@ -13,6 +14,19 @@ export interface VercelCompatibleResponse extends ServerResponse {
 
 export type VercelRequest = VercelCompatibleRequest;
 export type VercelResponse = VercelCompatibleResponse;
+
+export function setSecurityHeaders(res: VercelCompatibleResponse): void {
+  if (typeof res.setHeader === 'function') {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS, HEAD');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('X-Frame-Options', 'DENY');
+    res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+    res.setHeader('X-XSS-Protection', '1; mode=block');
+    res.setHeader('Strict-Transport-Security', 'max-age=63072000; includeSubDomains; preload');
+  }
+}
 
 export async function parseIncomingBody(req: VercelCompatibleRequest): Promise<Record<string, unknown>> {
   if (req.body !== undefined && req.body !== null) {
@@ -53,12 +67,7 @@ export function sendJson(
   statusCode: number,
   payload: unknown
 ): void {
-  if (typeof res.setHeader === 'function') {
-    res.setHeader('X-Content-Type-Options', 'nosniff');
-    res.setHeader('X-Frame-Options', 'DENY');
-    res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
-    res.setHeader('X-XSS-Protection', '1; mode=block');
-  }
+  setSecurityHeaders(res);
 
   if (typeof res.status === 'function' && typeof res.json === 'function') {
     res.status(statusCode);
@@ -70,5 +79,5 @@ export function sendJson(
   if (typeof res.setHeader === 'function') {
     res.setHeader('Content-Type', 'application/json; charset=utf-8');
   }
-  res.end(JSON.stringify(payload));
+  res.end(payload !== null && payload !== undefined ? JSON.stringify(payload) : '');
 }

@@ -71,6 +71,26 @@ export async function resolveCityCoordinates(city: string): Promise<GeoLocationR
   }
 }
 
+function getWeatherApiUrl(lat: number, lon: number, eventDateIso: string): string {
+  const targetDate = new Date(eventDateIso);
+  const diffDays = Math.ceil((targetDate.getTime() - Date.now()) / (1000 * 3600 * 24));
+  if (diffDays >= 0 && diffDays <= 16) {
+    return `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&daily=temperature_2m_max,precipitation_probability_max,wind_speed_10m_max&timezone=auto`;
+  }
+  const pastDate = `${targetDate.getFullYear() - 1}-${eventDateIso.slice(5)}`;
+  return `https://archive-api.open-meteo.com/v1/archive?latitude=${lat}&longitude=${lon}&start_date=${pastDate}&end_date=${pastDate}&daily=temperature_2m_max,precipitation_sum,wind_speed_10m_max&timezone=auto`;
+}
+
+function determineWeatherRiskAction(precipProb: number, tempMax: number): string {
+  if (precipProb > 40) {
+    return 'High Rain Probability (>40%): Reserve waterproof canopy/tent and ensure elevated electrical distribution.';
+  }
+  if (tempMax > 38) {
+    return 'Extreme Heat Alert (>38°C): Provision misting fans, air-conditioned green rooms, and double electrolyte hydration stations.';
+  }
+  return 'Optimal outdoor/indoor weather conditions predicted.';
+}
+
 /**
  * Assesses weather risks (rain, extreme heat, high wind) for target date via Open-Meteo.
  */
@@ -80,20 +100,7 @@ export async function fetchEventWeatherRisk(
   eventDateIso: string
 ): Promise<WeatherRiskAssessment> {
   try {
-    const targetDate = new Date(eventDateIso);
-    const now = new Date();
-    const diffDays = Math.ceil((targetDate.getTime() - now.getTime()) / (1000 * 3600 * 24));
-    let url = '';
-
-    if (diffDays >= 0 && diffDays <= 16) {
-      url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&daily=temperature_2m_max,precipitation_probability_max,wind_speed_10m_max&timezone=auto`;
-    } else {
-      const year = targetDate.getFullYear() - 1;
-      const monthDay = eventDateIso.slice(5);
-      const pastDate = `${year}-${monthDay}`;
-      url = `https://archive-api.open-meteo.com/v1/archive?latitude=${lat}&longitude=${lon}&start_date=${pastDate}&end_date=${pastDate}&daily=temperature_2m_max,precipitation_sum,wind_speed_10m_max&timezone=auto`;
-    }
-
+    const url = getWeatherApiUrl(lat, lon, eventDateIso);
     const res = await fetchWithTimeout(url);
     const data = await res.json();
 
@@ -103,23 +110,13 @@ export async function fetchEventWeatherRisk(
     const tempMax = data.daily?.temperature_2m_max?.[0] ?? 32;
     const windSpeed = data.daily?.wind_speed_10m_max?.[0] ?? 12;
 
-    const isHighRisk = precipProb > 40 || tempMax > 38 || windSpeed > 40;
-    const contingencyRequired = precipProb > 40;
-
-    let recommendedAction = 'Optimal outdoor/indoor weather conditions predicted.';
-    if (precipProb > 40) {
-      recommendedAction = 'High Rain Probability (>40%): Reserve waterproof canopy/tent and ensure elevated electrical distribution.';
-    } else if (tempMax > 38) {
-      recommendedAction = 'Extreme Heat Alert (>38°C): Provision misting fans, air-conditioned green rooms, and double electrolyte hydration stations.';
-    }
-
     return {
       precipitationProbMax: precipProb,
       tempMaxC: tempMax,
       windSpeedMaxKmH: windSpeed,
-      isHighRisk,
-      contingencyRequired,
-      recommendedAction,
+      isHighRisk: precipProb > 40 || tempMax > 38 || windSpeed > 40,
+      contingencyRequired: precipProb > 40,
+      recommendedAction: determineWeatherRiskAction(precipProb, tempMax),
     };
   } catch {
     return {

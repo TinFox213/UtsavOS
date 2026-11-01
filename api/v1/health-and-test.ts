@@ -1,3 +1,4 @@
+// api/v1/health-and-test.ts
 import { sendJson, VercelCompatibleRequest, VercelCompatibleResponse } from '../_lib/http';
 import { checkRateLimit, RateLimitResult } from '../_lib/security';
 
@@ -18,6 +19,10 @@ function applyRateLimit(res: VercelCompatibleResponse, rate: RateLimitResult): v
 }
 
 export default async function handler(req: VercelCompatibleRequest, res: VercelCompatibleResponse) {
+  if (req.method === 'OPTIONS') {
+    return sendJson(res, 204, null);
+  }
+
   const clientIp = getClientIp(req);
   const rate = checkRateLimit(clientIp);
   applyRateLimit(res, rate);
@@ -26,7 +31,7 @@ export default async function handler(req: VercelCompatibleRequest, res: VercelC
     return sendJson(res, 429, { status: 'error', message: 'Too Many Requests' });
   }
 
-  if (req.method !== 'GET') {
+  if (req.method !== 'GET' && req.method !== 'HEAD') {
     return sendJson(res, 405, { status: 'error', message: 'Method Not Allowed' });
   }
 

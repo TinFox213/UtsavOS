@@ -96,35 +96,50 @@ export interface CalculateBudgetParams {
   archetype: EventArchetype;
   currency: CurrencyCode;
   tier?: BudgetTier;
-  contingencyRate?: number; // Default 0.08 (8%)
-  taxRate?: number; // Default 0.10 (10%)
+  contingencyRate?: number;
+  taxRate?: number;
+}
+
+export interface BudgetReserves {
+  contingencyReserve: number;
+  estimatedTaxReserve: number;
+  netAllocatableBudget: number;
+}
+
+export interface FeasibilityAssessment {
+  perCapitaActual: number;
+  perCapitaMinimumViable: number;
+  feasibilityRatio: number;
+  feasibilityStatus: FeasibilityStatus;
+  deficitAmount: number;
+  maxViableGuestsAtCurrentBudget: number;
 }
 
 /**
- * Calculates a complete, mathematically balanced budget summary with
- * tax and contingency reserves, per-capita feasibility checks, and 12-category distributions.
+ * Calculates contingency and tax reserves with integer precision.
  */
-export function calculateBudgetSummary(params: CalculateBudgetParams): BudgetSummary {
-  const {
-    totalBudget,
-    guestCount,
-    archetype,
-    currency,
-    tier = 'STANDARD',
-    contingencyRate = 0.08,
-    taxRate = 0.10,
-  } = params;
-
-  const safeTotalBudget = Math.max(1, Math.round(totalBudget));
-  const safeGuestCount = Math.max(1, Math.round(guestCount));
-
-  // 1. Isolate Reserves
+export function calculateReserves(
+  safeTotalBudget: number,
+  contingencyRate: number,
+  taxRate: number
+): BudgetReserves {
   const contingencyReserve = Math.round(safeTotalBudget * contingencyRate);
-  const remainingAfterContingency = safeTotalBudget - contingencyReserve;
-  const estimatedTaxReserve = Math.round(remainingAfterContingency * (taxRate / (1 + taxRate)));
+  const remaining = safeTotalBudget - contingencyReserve;
+  const estimatedTaxReserve = Math.round(remaining * (taxRate / (1 + taxRate)));
   const netAllocatableBudget = safeTotalBudget - contingencyReserve - estimatedTaxReserve;
+  return { contingencyReserve, estimatedTaxReserve, netAllocatableBudget };
+}
 
-  // 2. Per-Capita Feasibility Analysis
+/**
+ * Evaluates per-capita financial feasibility against market tier baselines.
+ */
+export function evaluateFeasibility(
+  safeTotalBudget: number,
+  safeGuestCount: number,
+  archetype: EventArchetype,
+  tier: BudgetTier,
+  currency: CurrencyCode
+): FeasibilityAssessment {
   const perCapitaActual = Math.round(safeTotalBudget / safeGuestCount);
   const perCapitaMinimumViable = MIN_PER_CAPITA_FLOOR[archetype][tier][currency];
   const feasibilityRatio = Number((perCapitaActual / perCapitaMinimumViable).toFixed(2));
@@ -143,30 +158,43 @@ export function calculateBudgetSummary(params: CalculateBudgetParams): BudgetSum
 
   const maxViableGuestsAtCurrentBudget = Math.floor(safeTotalBudget / perCapitaMinimumViable);
 
-  // 3. Category Allocation with Largest-Remainder Integer Distribution
+  return {
+    perCapitaActual,
+    perCapitaMinimumViable,
+    feasibilityRatio,
+    feasibilityStatus,
+    deficitAmount,
+    maxViableGuestsAtCurrentBudget,
+  };
+}
+
+/**
+ * Distributes net budget across categories using largest-remainder algorithm.
+ */
+export function allocateCategories(
+  netAllocatableBudget: number,
+  safeGuestCount: number,
+  archetype: EventArchetype
+): BudgetCategoryAllocation[] {
   const weights = BASE_WEIGHTS[archetype];
   const keys = Object.keys(weights) as VendorCategoryKey[];
 
-  const rawAmounts = keys.map((key) => ({
-    key,
-    label: CATEGORY_LABELS[key],
-    weight: weights[key],
-    exactAmount: netAllocatableBudget * weights[key],
-    floorAmount: Math.floor(netAllocatableBudget * weights[key]),
-    remainder: (netAllocatableBudget * weights[key]) - Math.floor(netAllocatableBudget * weights[key]),
-  }));
+  const rawAmounts = keys.map((key) => {
+    const exact = netAllocatableBudget * weights[key];
+    const floorAmount = Math.floor(exact);
+    return { key, weight: weights[key], floorAmount, remainder: exact - floorAmount };
+  });
 
   const floorSum = rawAmounts.reduce((sum, item) => sum + item.floorAmount, 0);
   const discrepancy = netAllocatableBudget - floorSum;
 
-  // Sort by largest remainder and distribute difference
   rawAmounts.sort((a, b) => b.remainder - a.remainder);
   for (let i = 0; i < discrepancy; i++) {
     const item = rawAmounts[i];
     if (item) item.floorAmount += 1;
   }
 
-  const categories: BudgetCategoryAllocation[] = keys.map((key) => {
+  return keys.map((key) => {
     const found = rawAmounts.find((item) => item.key === key)!;
     const allocatedAmount = found.floorAmount;
     return {
@@ -181,71 +209,61 @@ export function calculateBudgetSummary(params: CalculateBudgetParams): BudgetSum
       rationale: `${(weights[key] * 100).toFixed(1)}% base allocation for ${archetype}`,
     };
   });
+}
+
+/**
+ * Calculates a complete, mathematically balanced budget summary.
+ */
+export function calculateBudgetSummary(params: CalculateBudgetParams): BudgetSummary {
+  const safeTotalBudget = Math.max(1, Math.round(params.totalBudget));
+  const safeGuestCount = Math.max(1, Math.round(params.guestCount));
+  const contingencyRate = params.contingencyRate ?? 0.08;
+  const taxRate = params.taxRate ?? 0.10;
+  const tier = params.tier ?? 'STANDARD';
+
+  const reserves = calculateReserves(safeTotalBudget, contingencyRate, taxRate);
+  const feasibility = evaluateFeasibility(safeTotalBudget, safeGuestCount, params.archetype, tier, params.currency);
+  const categories = allocateCategories(reserves.netAllocatableBudget, safeGuestCount, params.archetype);
 
   return {
     totalBudget: safeTotalBudget,
     contingencyRate,
-    contingencyReserve,
     taxRate,
-    estimatedTaxReserve,
-    netAllocatableBudget,
-    perCapitaActual,
-    perCapitaMinimumViable,
-    feasibilityRatio,
-    feasibilityStatus,
-    deficitAmount,
-    maxViableGuestsAtCurrentBudget,
+    ...reserves,
+    ...feasibility,
     categories,
   };
 }
 
 /**
- * Rebalances unlocked categories proportionally when a user adjusts a slider or locks a quote.
- * Guarantees that sum(categories) === netAllocatableBudget.
+ * Rebalances unlocked categories proportionally when a user adjusts a slider.
  */
 export function rebalanceBudget(
   current: BudgetSummary,
   changedKey: VendorCategoryKey,
   newAmount: number
 ): BudgetSummary {
-  const boundedNewAmount = Math.max(0, Math.min(newAmount, current.netAllocatableBudget));
-  const targetCategory = current.categories.find((c) => c.key === changedKey);
-  if (!targetCategory) return current;
+  const boundedNew = Math.max(0, Math.min(newAmount, current.netAllocatableBudget));
+  const target = current.categories.find((c) => c.key === changedKey);
+  if (!target) return current;
 
   const lockedSum = current.categories
     .filter((c) => c.isLocked || c.key === changedKey)
-    .reduce((sum, c) => sum + (c.key === changedKey ? boundedNewAmount : c.allocatedAmount), 0);
+    .reduce((sum, c) => sum + (c.key === changedKey ? boundedNew : c.allocatedAmount), 0);
 
-  const availableForUnlocked = Math.max(0, current.netAllocatableBudget - lockedSum);
-  const unlockedCategories = current.categories.filter(
-    (c) => !c.isLocked && c.key !== changedKey
-  );
+  const available = Math.max(0, current.netAllocatableBudget - lockedSum);
+  const unlocked = current.categories.filter((c) => !c.isLocked && c.key !== changedKey);
+  const totalWeight = unlocked.reduce((sum, c) => sum + c.weight, 0);
+  const guestCount = current.totalBudget / current.perCapitaActual;
 
-  const totalUnlockedWeight = unlockedCategories.reduce((sum, c) => sum + c.weight, 0);
-
-  const updatedCategories = current.categories.map((c) => {
+  const categories = current.categories.map((c) => {
     if (c.key === changedKey) {
-      return {
-        ...c,
-        allocatedAmount: boundedNewAmount,
-        perCapitaAmount: Math.round(boundedNewAmount / (current.totalBudget / current.perCapitaActual)),
-      };
+      return { ...c, allocatedAmount: boundedNew, perCapitaAmount: Math.round(boundedNew / guestCount) };
     }
-    if (c.isLocked) {
-      return c;
-    }
-    const proportionalShare =
-      totalUnlockedWeight > 0 ? (c.weight / totalUnlockedWeight) * availableForUnlocked : 0;
-    const rebalancedAmount = Math.round(proportionalShare);
-    return {
-      ...c,
-      allocatedAmount: rebalancedAmount,
-      perCapitaAmount: Math.round(rebalancedAmount / (current.totalBudget / current.perCapitaActual)),
-    };
+    if (c.isLocked) return c;
+    const share = totalWeight > 0 ? Math.round((c.weight / totalWeight) * available) : 0;
+    return { ...c, allocatedAmount: share, perCapitaAmount: Math.round(share / guestCount) };
   });
 
-  return {
-    ...current,
-    categories: updatedCategories,
-  };
+  return { ...current, categories };
 }

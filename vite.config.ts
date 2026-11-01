@@ -14,12 +14,12 @@ export default defineConfig({
           const url = req.url ? req.url.split('?')[0] : '';
           if (url === '/api/v1/health-and-test') {
             const { default: handler } = await import('./api/v1/health-and-test');
-            await handler(req as any, res as any);
+            await handler(req as unknown as Parameters<typeof handler>[0], res as unknown as Parameters<typeof handler>[1]);
             return;
           }
           if (url === '/api/v1/ai-generate') {
             const { default: handler } = await import('./api/v1/ai-generate');
-            await handler(req as any, res as any);
+            await handler(req as unknown as Parameters<typeof handler>[0], res as unknown as Parameters<typeof handler>[1]);
             return;
           }
           if (url === '/api/v1/verify-test-suite') {

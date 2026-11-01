@@ -1,3 +1,4 @@
+// api/v1/ai-generate.ts
 import { GoogleGenAI } from '@google/genai';
 import { parseIncomingBody, sendJson, VercelCompatibleRequest, VercelCompatibleResponse } from '../_lib/http';
 import { auditAndSanitizeInput, checkRateLimit, RateLimitResult } from '../_lib/security';
@@ -98,6 +99,10 @@ async function executeCopilotPipeline(
 }
 
 export default async function handler(req: VercelCompatibleRequest, res: VercelCompatibleResponse) {
+  if (req.method === 'OPTIONS') {
+    return sendJson(res, 204, null);
+  }
+
   const clientIp = getClientIp(req);
   const rate = checkRateLimit(clientIp);
   applyRateLimit(res, rate);

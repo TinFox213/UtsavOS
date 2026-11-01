@@ -40,19 +40,9 @@ function createInitialEventPlan(currency: CurrencyCode): EventPlanState {
     city: preset.defaultLocation,
     currency,
     guestCount: preset.defaultGuestCount,
-    dietary: {
-      vegetarianPct: 70,
-      veganPct: 10,
-      jainPct: 15,
-      halalPct: 0,
-      glutenFreeCount: 12,
-      nutAllergyCount: 6,
-    },
+    dietary: { vegetarianPct: 70, veganPct: 10, jainPct: 15, halalPct: 0, glutenFreeCount: 12, nutAllergyCount: 6 },
     budget,
-    milestones: generateCountdownMilestones({
-      archetype: preset.archetype,
-      eventDateIso: '2026-12-18',
-    }),
+    milestones: generateCountdownMilestones({ archetype: preset.archetype, eventDateIso: '2026-12-18' }),
     runOfShow: generateEventDayRunOfShow(preset.archetype),
     vendors: initializeVendorRecords(budget),
     aiRuns: [],
@@ -60,36 +50,28 @@ function createInitialEventPlan(currency: CurrencyCode): EventPlanState {
   };
 }
 
-export function useEventPlannerState() {
-  const [currentStep, setCurrentStep] = useState<number>(1);
-  const [currency, setCurrency] = useState<CurrencyCode>('INR');
-  const [isHighContrast, setIsHighContrast] = useState<boolean>(false);
-  const [isXRayOpen, setIsXRayOpen] = useState<boolean>(false);
-  const [isWorkspaceModalOpen, setIsWorkspaceModalOpen] = useState<boolean>(false);
-
-  const [qaState, setQaState] = useState<QAState>({
-    activeField: 'Organizer Email',
-    activeValue: 'john@example.com',
-    validationStatus: 'VALID',
-    statusMessage: 'Ready for live typing demonstration',
-  });
-
-  const [eventPlan, setEventPlan] = useState<EventPlanState>(() => createInitialEventPlan('INR'));
-
+function useKeyboardShortcuts(
+  setCurrentStep: React.Dispatch<React.SetStateAction<number>>,
+  setIsXRayOpen: React.Dispatch<React.SetStateAction<boolean>>
+): void {
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.altKey && !isNaN(Number(e.key))) {
         const step = Number(e.key);
         if (step >= 1 && step <= 6) setCurrentStep(step);
       }
-      if (e.altKey && (e.key === 'x' || e.key === 'X')) {
-        setIsXRayOpen((prev) => !prev);
-      }
+      if (e.altKey && (e.key === 'x' || e.key === 'X')) setIsXRayOpen((prev) => !prev);
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, []);
+  }, [setCurrentStep, setIsXRayOpen]);
+}
 
+function usePlanHandlers(
+  eventPlan: EventPlanState,
+  setEventPlan: React.Dispatch<React.SetStateAction<EventPlanState>>,
+  setCurrency: React.Dispatch<React.SetStateAction<CurrencyCode>>
+) {
   const handleSelectCurrency = useCallback((newCurrency: CurrencyCode) => {
     setCurrency(newCurrency);
     setEventPlan((prev) => ({
@@ -102,19 +84,48 @@ export function useEventPlannerState() {
         currency: newCurrency,
       }),
     }));
-  }, []);
+  }, [setCurrency, setEventPlan]);
 
   const handleExportDossier = useCallback(() => {
-    const md = exportPlanAsMarkdown(eventPlan);
-    downloadTextFile(`AuraPlan_${eventPlan.eventName.replace(/\s+/g, '_')}_Dossier.md`, md);
+    downloadTextFile(`AuraPlan_${eventPlan.eventName.replace(/\s+/g, '_')}_Dossier.md`, exportPlanAsMarkdown(eventPlan));
   }, [eventPlan]);
 
   const handleNewAIRun = useCallback((run: AIGenerationRun) => {
-    setEventPlan((prev) => ({
-      ...prev,
-      aiRuns: [...prev.aiRuns, run],
-    }));
-  }, []);
+    setEventPlan((prev) => ({ ...prev, aiRuns: [...prev.aiRuns, run] }));
+  }, [setEventPlan]);
+
+  return { handleSelectCurrency, handleExportDossier, handleNewAIRun };
+}
+
+function useQAStateHandler() {
+  const [qaState, setQaState] = useState<QAState>({
+    activeField: 'Organizer Email',
+    activeValue: 'john@example.com',
+    validationStatus: 'VALID',
+    statusMessage: 'Ready for live typing demonstration',
+  });
+
+  const handleFieldFocus = useCallback(
+    (field: string, value: string | number, status: 'VALID' | 'INVALID' | 'NEUTRAL', msg: string) => {
+      setQaState({ activeField: field, activeValue: value, validationStatus: status, statusMessage: msg });
+    },
+    []
+  );
+
+  return { qaState, setQaState, handleFieldFocus };
+}
+
+export function useEventPlannerState() {
+  const [currentStep, setCurrentStep] = useState<number>(1);
+  const [currency, setCurrency] = useState<CurrencyCode>('INR');
+  const [isHighContrast, setIsHighContrast] = useState<boolean>(false);
+  const [isXRayOpen, setIsXRayOpen] = useState<boolean>(false);
+  const [isWorkspaceModalOpen, setIsWorkspaceModalOpen] = useState<boolean>(false);
+  const [eventPlan, setEventPlan] = useState<EventPlanState>(() => createInitialEventPlan('INR'));
+  const { qaState, setQaState, handleFieldFocus } = useQAStateHandler();
+
+  useKeyboardShortcuts(setCurrentStep, setIsXRayOpen);
+  const { handleSelectCurrency, handleExportDossier, handleNewAIRun } = usePlanHandlers(eventPlan, setEventPlan, setCurrency);
 
   const handleGenerateRfp = useCallback((vendor: VendorRecord) => {
     setCurrentStep(6);
@@ -125,19 +136,7 @@ export function useEventPlannerState() {
       validationStatus: 'VALID',
       statusMessage: `RFP Copilot launched for ${vendor.categoryLabel}`,
     });
-  }, []);
-
-  const handleFieldFocus = useCallback(
-    (field: string, value: string | number, status: 'VALID' | 'INVALID' | 'NEUTRAL', msg: string) => {
-      setQaState({
-        activeField: field,
-        activeValue: value,
-        validationStatus: status,
-        statusMessage: msg,
-      });
-    },
-    []
-  );
+  }, [setQaState]);
 
   return {
     currentStep,
